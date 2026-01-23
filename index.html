@@ -1,139 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>OneX Coin | Staking</title>
-  <link rel="stylesheet" href="style.css"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OneX Coin | Optimized Staking</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="container">
-  <h1>OneX Staking</h1>
-  <div id="networkWarning" style="display:none;color:red;">
-    ⚠️ Switch to Polygon Mainnet
-  </div>
+    <div class="container">
+        <h1>OneX Staking</h1>
+        <div id="networkWarning">⚠️ Switch to Polygon Mainnet</div>
 
-  <button id="connectBtn">Connect Wallet</button>
+        <button id="connectBtn">Connect Wallet</button>
 
-  <div class="card">
-    <span>Staked Balance</span>
-    <span id="stakedAmount" class="value">0</span>
-    <small>ONEX</small>
-  </div>
+        <div class="card">
+            <span>Staked Balance</span>
+            <span id="stakedAmount" class="value">0.00</span>
+            <small>ONEX</small>
+        </div>
 
-  <div class="card">
-    <span>Mining Rewards</span>
-    <span id="rewardAmount" class="value">0</span>
-    <button id="claimBtn" disabled>Claim Rewards</button>
-  </div>
+        <div class="card">
+            <span>Mining Rewards</span>
+            <span id="rewardAmount" class="value">0.00</span>
+            <button class="btn-claim" id="claimBtn" disabled onclick="handleAction('claim', 'claimBtn')">Claim Rewards</button>
+        </div>
 
-  <div class="card">
-    <div>Wallet Balance: <b><span id="walletBalance">0</span> ONEX</b></div>
-    <input type="number" id="stakeInput" placeholder="Min 10,000 ONEX"/>
-    <button id="stakeBtn" disabled>Stake</button>
-  </div>
+        <div style="text-align: left; margin-top: 20px;">
+            <div class="balance-info">Wallet: <span id="userBalance">0.00</span> ONEX</div>
+            <input type="number" id="stakeInput" placeholder="Amount (Min: 10,000)">
+            <button class="btn-stake" id="stakeBtn" disabled onclick="handleAction('stake', 'stakeBtn')">Stake Now</button>
+        </div>
 
-  <button id="unstakeBtn" disabled>Unstake All</button>
-</div>
+        <button class="btn-unstake" id="unstakeBtn" disabled onclick="handleAction('unstake', 'unstakeBtn')">Unstake All</button>
+    </div>
 
-<script src="https://cdn.jsdelivr.net/npm/web3@1.5.2/dist/web3.min.js"></script>
-<script>
-let web3, contract, user;
-const CONTRACT_ADDRESS = "0x2129fE3E81bedBb85D65760896b8d14Cfafb403a";
-const POLYGON_CHAIN_ID = 137;
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.5.2/dist/web3.min.js"></script>
+    <script>
+        let web3, contract, userAccount, decimals = 18;
+        const contractAddress = "0x2129fE3E81bedBb85D65760896b8d14Cfafb403a";
+        const POLYGON_CHAIN_ID = 137;
 
-const ABI = [
-  {"inputs":[],"name":"decimals","outputs":[{"type":"uint8"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"type":"uint256"}],"name":"stake","stateMutability":"nonpayable","type":"function"},
-  {"inputs":[{"type":"uint256"}],"name":"unstake","stateMutability":"nonpayable","type":"function"},
-  {"inputs":[],"name":"claimReward","stateMutability":"nonpayable","type":"function"},
-  {"inputs":[{"type":"address"}],"name":"balanceOf","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"type":"address"}],"name":"earned","outputs":[{"type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"type":"address"}],"name":"stakes","outputs":[
-    {"name":"amount","type":"uint256"},
-    {"name":"rewardPerTokenPaid","type":"uint256"},
-    {"name":"rewards","type":"uint256"}
-  ],"stateMutability":"view","type":"function"}
-];
+        const abi = [
+            {"inputs":[],"name":"decimals","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"stake","outputs":[],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[],"name":"claimReward","outputs":[],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"unstake","outputs":[],"stateMutability":"nonpayable","type":"function"},
+            {"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"earned","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"address","name":"owner","type":"address"},{"internalType":"address","name":"spender","type":"address"}],"name":"allowance","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+            {"inputs":[{"internalType":"address","name":"spender","type":"address"},{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"approve","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"nonpayable","type":"function"}
+        ];
 
-async function connect() {
-  if (!window.ethereum) return alert("Install MetaMask");
-  web3 = new Web3(window.ethereum);
+        async function init() {
+            if (!window.ethereum) return alert("MetaMask not found!");
+            web3 = new Web3(window.ethereum);
+            try {
+                const chainId = await web3.eth.getChainId();
+                if (chainId !== POLYGON_CHAIN_ID) {
+                    document.getElementById('networkWarning').style.display = 'block';
+                    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x89' }] });
+                    location.reload();
+                    return;
+                }
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                userAccount = accounts[0];
+                contract = new web3.eth.Contract(abi, contractAddress);
+                decimals = await contract.methods.decimals().call();
+                document.getElementById('connectBtn').innerText = "Connected";
+                toggleUI(true);
+                refreshData();
+            } catch (e) { console.error(e); }
+        }
 
-  const chainId = await web3.eth.getChainId();
-  if (chainId !== POLYGON_CHAIN_ID) {
-    document.getElementById("networkWarning").style.display = "block";
-    await ethereum.request({
-      method: "wallet_switchEthereumChain",
-      params: [{ chainId: "0x89" }]
-    });
-    return;
-  }
+        async function refreshData() {
+            if (!userAccount) return;
+            const base = BigInt(10) ** BigInt(decimals);
+            const staked = await contract.methods.balanceOf(userAccount).call();
+            const earned = await contract.methods.earned(userAccount).call();
+            const walletBal = await contract.methods.balanceOf(userAccount).call();
 
-  const accounts = await ethereum.request({ method: "eth_requestAccounts" });
-  user = accounts[0];
+            document.getElementById('stakedAmount').innerText = (BigInt(staked) / base).toString();
+            document.getElementById('userBalance').innerText = (BigInt(walletBal) / base).toString();
+            const rInt = BigInt(earned) / base;
+            const rFrac = (BigInt(earned) % base).toString().padStart(decimals, '0').substring(0, 4);
+            document.getElementById('rewardAmount').innerText = rInt + "." + rFrac;
+        }
 
-  contract = new web3.eth.Contract(ABI, CONTRACT_ADDRESS);
+        async function handleAction(type, btnId) {
+            const btn = document.getElementById(btnId);
+            const amount = document.getElementById('stakeInput').value;
+            const base = BigInt(10) ** BigInt(decimals);
+            if (type === 'unstake' && !confirm("Are you sure you want to unstake all?")) return;
 
-  document.getElementById("connectBtn").innerText = "Connected";
-  enableUI(true);
-  refresh();
-}
+            btn.disabled = true;
+            try {
+                if (type === 'stake') {
+                    if (amount < 10000) throw new Error("Min 10,000 ONEX");
+                    const maxUint = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+                    const currentAllowance = await contract.methods.allowance(userAccount, contractAddress).call();
+                    const weiAmount = (BigInt(amount) * base).toString();
+                    if (BigInt(currentAllowance) < BigInt(weiAmount)) {
+                        await contract.methods.approve(contractAddress, maxUint).send({ from: userAccount });
+                    }
+                    await contract.methods.stake(weiAmount).send({ from: userAccount });
+                }
+                else if (type === 'claim') await contract.methods.claimReward().send({ from: userAccount });
+                else if (type === 'unstake') {
+                    const staked = await contract.methods.balanceOf(userAccount).call();
+                    await contract.methods.unstake(staked).send({ from: userAccount });
+                }
+                alert("Success!");
+                refreshData();
+            } catch (err) { alert("Transaction failed. Check wallet."); }
+            btn.disabled = false;
+        }
 
-async function refresh() {
-  const decimals = await contract.methods.decimals().call();
-  const base = BigInt(10) ** BigInt(decimals);
-
-  const wallet = await contract.methods.balanceOf(user).call();
-  const earned = await contract.methods.earned(user).call();
-  const stakeInfo = await contract.methods.stakes(user).call();
-
-  document.getElementById("walletBalance").innerText =
-    (BigInt(wallet) / base).toString();
-
-  document.getElementById("rewardAmount").innerText =
-    (BigInt(earned) / base).toString();
-
-  document.getElementById("stakedAmount").innerText =
-    (BigInt(stakeInfo.amount) / base).toString();
-}
-
-async function stake() {
-  const amount = document.getElementById("stakeInput").value;
-  if (amount < 10000) return alert("Min stake 10,000 ONEX");
-
-  const decimals = await contract.methods.decimals().call();
-  const wei = (BigInt(amount) * (BigInt(10) ** BigInt(decimals))).toString();
-
-  await contract.methods.stake(wei).send({ from: user });
-  refresh();
-}
-
-async function claim() {
-  await contract.methods.claimReward().send({ from: user });
-  refresh();
-}
-
-async function unstake() {
-  if (!confirm("Unstake all?")) return;
-
-  const stakeInfo = await contract.methods.stakes(user).call();
-  await contract.methods.unstake(stakeInfo.amount).send({ from: user });
-  refresh();
-}
-
-function enableUI(v) {
-  ["stakeBtn","claimBtn","unstakeBtn"].forEach(id => {
-    document.getElementById(id).disabled = !v;
-  });
-}
-
-document.getElementById("connectBtn").onclick = connect;
-document.getElementById("stakeBtn").onclick = stake;
-document.getElementById("claimBtn").onclick = claim;
-document.getElementById("unstakeBtn").onclick = unstake;
-</script>
-
+        function toggleUI(s) {
+            document.getElementById('stakeBtn').disabled = !s;
+            document.getElementById('claimBtn').disabled = !s;
+            document.getElementById('unstakeBtn').disabled = !s;
+        }
+        document.getElementById('connectBtn').onclick = init;
+    </script>
 </body>
 </html>
