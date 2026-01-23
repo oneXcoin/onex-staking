@@ -1,45 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>OneX Coin | Staking</title>
-  <link rel="stylesheet" href="style.css"/>
-</head>
-<body>
+let web3;
+let contract;
+let user;
 
-<div class="container">
-  <h1>OneX Staking</h1>
-  <div id="networkWarning" style="display:none;color:red;">
-    ⚠️ Switch to Polygon Mainnet
-  </div>
-
-  <button id="connectBtn">Connect Wallet</button>
-
-  <div class="card">
-    <span>Staked Balance</span>
-    <span id="stakedAmount" class="value">0</span>
-    <small>ONEX</small>
-  </div>
-
-  <div class="card">
-    <span>Mining Rewards</span>
-    <span id="rewardAmount" class="value">0</span>
-    <button id="claimBtn" disabled>Claim Rewards</button>
-  </div>
-
-  <div class="card">
-    <div>Wallet Balance: <b><span id="walletBalance">0</span> ONEX</b></div>
-    <input type="number" id="stakeInput" placeholder="Min 10,000 ONEX"/>
-    <button id="stakeBtn" disabled>Stake</button>
-  </div>
-
-  <button id="unstakeBtn" disabled>Unstake All</button>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/web3@1.5.2/dist/web3.min.js"></script>
-<script>
-let web3, contract, user;
 const CONTRACT_ADDRESS = "0x2129fE3E81bedBb85D65760896b8d14Cfafb403a";
 const POLYGON_CHAIN_ID = 137;
 
@@ -57,11 +19,15 @@ const ABI = [
   ],"stateMutability":"view","type":"function"}
 ];
 
-async function connect() {
-  if (!window.ethereum) return alert("Install MetaMask");
-  web3 = new Web3(window.ethereum);
+async function connectWallet() {
+  if (!window.ethereum) {
+    alert("MetaMask install kar");
+    return;
+  }
 
+  web3 = new Web3(window.ethereum);
   const chainId = await web3.eth.getChainId();
+
   if (chainId !== POLYGON_CHAIN_ID) {
     document.getElementById("networkWarning").style.display = "block";
     await ethereum.request({
@@ -78,62 +44,63 @@ async function connect() {
 
   document.getElementById("connectBtn").innerText = "Connected";
   enableUI(true);
-  refresh();
+  refreshData();
 }
 
-async function refresh() {
+async function refreshData() {
   const decimals = await contract.methods.decimals().call();
   const base = BigInt(10) ** BigInt(decimals);
 
   const wallet = await contract.methods.balanceOf(user).call();
-  const earned = await contract.methods.earned(user).call();
+  const reward = await contract.methods.earned(user).call();
   const stakeInfo = await contract.methods.stakes(user).call();
 
   document.getElementById("walletBalance").innerText =
     (BigInt(wallet) / base).toString();
 
   document.getElementById("rewardAmount").innerText =
-    (BigInt(earned) / base).toString();
+    (BigInt(reward) / base).toString();
 
   document.getElementById("stakedAmount").innerText =
     (BigInt(stakeInfo.amount) / base).toString();
 }
 
-async function stake() {
+async function stakeTokens() {
   const amount = document.getElementById("stakeInput").value;
-  if (amount < 10000) return alert("Min stake 10,000 ONEX");
+  if (amount < 10000) {
+    alert("Minimum 10,000 ONEX");
+    return;
+  }
 
   const decimals = await contract.methods.decimals().call();
-  const wei = (BigInt(amount) * (BigInt(10) ** BigInt(decimals))).toString();
+  const weiAmount =
+    (BigInt(amount) * (BigInt(10) ** BigInt(decimals))).toString();
 
-  await contract.methods.stake(wei).send({ from: user });
-  refresh();
+  await contract.methods.stake(weiAmount).send({ from: user });
+  refreshData();
 }
 
-async function claim() {
+async function claimRewards() {
   await contract.methods.claimReward().send({ from: user });
-  refresh();
+  refreshData();
 }
 
-async function unstake() {
-  if (!confirm("Unstake all?")) return;
+async function unstakeAll() {
+  if (!confirm("Unstake all tokens?")) return;
 
   const stakeInfo = await contract.methods.stakes(user).call();
   await contract.methods.unstake(stakeInfo.amount).send({ from: user });
-  refresh();
+  refreshData();
 }
 
-function enableUI(v) {
-  ["stakeBtn","claimBtn","unstakeBtn"].forEach(id => {
-    document.getElementById(id).disabled = !v;
-  });
+function enableUI(enable) {
+  document.getElementById("stakeBtn").disabled = !enable;
+  document.getElementById("claimBtn").disabled = !enable;
+  document.getElementById("unstakeBtn").disabled = !enable;
 }
 
-document.getElementById("connectBtn").onclick = connect;
-document.getElementById("stakeBtn").onclick = stake;
-document.getElementById("claimBtn").onclick = claim;
-document.getElementById("unstakeBtn").onclick = unstake;
-</script>
-
-</body>
-</html>
+/* BUTTON EVENTS */
+document.getElementById("connectBtn").onclick = connectWallet;
+document.getElementById("stakeBtn").onclick = stakeTokens;
+document.getElementById("claimBtn").onclick = claimRewards;
+document.getElementById("unstakeBtn").onclick = unstakeAll;
